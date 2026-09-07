@@ -1,0 +1,7 @@
+node_modules
+.next
+.next-profiles
+out
+*.log
+.DS_Store
+*.tsbuildinfo
