@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { DimensionScore } from "./types";
 import { useHydrated } from "./use-hydrated";
 
@@ -91,20 +91,25 @@ export function readEventRoom(code: string): EventRoom | null {
 
 // Global cached snapshots for useSyncExternalStore
 const roomCache = new Map<string, EventRoom | null>();
+const roomRawCache = new Map<string, string>();
 
 export function persistEventRoom(room: EventRoom): void {
   if (!isBrowser()) return;
   const upperCode = room.code.toUpperCase().trim();
   const key = getRoomStorageKey(upperCode);
+  const raw = JSON.stringify(room);
 
   try {
-    window.localStorage.setItem(key, JSON.stringify(room));
+    window.localStorage.setItem(key, raw);
   } catch {
     // quota error fallback
   }
 
-  // Update in-memory cache with fresh object reference
-  roomCache.set(upperCode, room);
+  // Update in-memory cache with fresh object reference if content changed
+  if (roomRawCache.get(upperCode) !== raw) {
+    roomRawCache.set(upperCode, raw);
+    roomCache.set(upperCode, room);
+  }
 
   if (broadcastChannel) {
     try {
@@ -120,12 +125,25 @@ export function persistEventRoom(room: EventRoom): void {
 function getRoomSnapshot(code: string): EventRoom | null {
   const upper = code.toUpperCase().trim();
   if (!roomCache.has(upper)) {
-    roomCache.set(upper, readEventRoom(upper));
+    const local = readEventRoom(upper);
+    if (local) {
+      roomRawCache.set(upper, JSON.stringify(local));
+      roomCache.set(upper, local);
+    } else {
+      roomCache.set(upper, null);
+    }
   }
   return roomCache.get(upper) ?? null;
 }
 
 const listenersMap = new Map<string, Set<() => void>>();
+
+function notifyRoomListeners(upperCode: string) {
+  const listeners = listenersMap.get(upperCode);
+  if (listeners) {
+    listeners.forEach((cb) => cb());
+  }
+}
 
 function subscribeRoom(code: string, callback: () => void) {
   const upper = code.toUpperCase().trim();
@@ -136,31 +154,32 @@ function subscribeRoom(code: string, callback: () => void) {
   }
   listenersMap.get(upper)!.add(callback);
 
-  const notifyAll = (updatedCode: string) => {
+  const handleUpdate = (updatedCode: string) => {
     if (updatedCode === upper) {
       const fresh = readEventRoom(upper);
-      roomCache.set(upper, fresh);
-      const listeners = listenersMap.get(upper);
-      if (listeners) {
-        listeners.forEach((cb) => cb());
+      const raw = JSON.stringify(fresh);
+      if (roomRawCache.get(upper) !== raw) {
+        roomRawCache.set(upper, raw);
+        roomCache.set(upper, fresh);
+        notifyRoomListeners(upper);
       }
     }
   };
 
   const onLocalEvent = (e: Event) => {
     const detail = (e as CustomEvent<string>).detail;
-    notifyAll(detail);
+    handleUpdate(detail);
   };
 
   const onStorage = (e: StorageEvent) => {
     if (e.key === getRoomStorageKey(upper)) {
-      notifyAll(upper);
+      handleUpdate(upper);
     }
   };
 
   const onBroadcast = (e: MessageEvent) => {
     if (e.data && e.data.code === upper) {
-      notifyAll(upper);
+      handleUpdate(upper);
     }
   };
 
@@ -187,6 +206,27 @@ function subscribeRoom(code: string, callback: () => void) {
   };
 }
 
+// Fetch room state from cloud server API and update snapshot
+export async function fetchServerRoom(code: string): Promise<EventRoom | null> {
+  if (!isBrowser() || !code) return null;
+  const upper = code.toUpperCase().trim();
+  try {
+    const res = await fetch(`/api/events/${upper}`);
+    if (!res.ok) return null;
+    const room = (await res.json()) as EventRoom;
+    const raw = JSON.stringify(room);
+
+    if (roomRawCache.get(upper) !== raw) {
+      roomRawCache.set(upper, raw);
+      roomCache.set(upper, room);
+      persistEventRoom(room);
+    }
+    return room;
+  } catch {
+    return null;
+  }
+}
+
 export function useEventRoom(code: string) {
   const hydrated = useHydrated();
   const upper = code?.toUpperCase().trim() || "";
@@ -195,6 +235,19 @@ export function useEventRoom(code: string) {
   const subscribe = useCallback((cb: () => void) => subscribeRoom(upper, cb), [upper]);
 
   const room = useSyncExternalStore(subscribe, getSnapshot, () => null);
+
+  // Poll server API every 2.5s for cross-device real-time state synchronization
+  useEffect(() => {
+    if (!isBrowser() || !upper) return;
+
+    fetchServerRoom(upper);
+
+    const interval = setInterval(() => {
+      fetchServerRoom(upper);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [upper]);
 
   return { room, hydrated };
 }
@@ -208,10 +261,25 @@ export interface CreateRoomInput {
   timeLimitSeconds?: number;
 }
 
-export function createEventRoom(input: CreateRoomInput): { room: EventRoom; hostParticipantId: string } {
+export async function createEventRoomAsync(input: CreateRoomInput): Promise<{ room: EventRoom; hostParticipantId: string }> {
+  try {
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      persistEventRoom(data.room);
+      return data;
+    }
+  } catch {
+    // API network fallback
+  }
+
+  // Fallback to local creation if API call fails
   const code = generateRoomCode();
   const hostId = generateId();
-
   const hostParticipant: EventParticipant = {
     id: hostId,
     name: input.hostName.trim() || "Host",
@@ -239,60 +307,189 @@ export function createEventRoom(input: CreateRoomInput): { room: EventRoom; host
   return { room, hostParticipantId: hostId };
 }
 
-export function joinEventRoom(code: string, participantName: string): EventParticipant | null {
-  const room = readEventRoom(code);
-  if (!room) return null;
-
-  const existing = room.participants.find(
-    (p) => p.name.toLowerCase().trim() === participantName.toLowerCase().trim()
-  );
-  if (existing) return existing;
-
-  const newId = generateId();
-  const newParticipant: EventParticipant = {
-    id: newId,
-    name: participantName.trim() || `Player ${room.participants.length + 1}`,
-    avatarSeed: newId,
-    isHost: false,
+export function createEventRoom(input: CreateRoomInput): { room: EventRoom; hostParticipantId: string } {
+  // Sync wrapper that also triggers async API registration
+  const code = generateRoomCode();
+  const hostId = generateId();
+  const hostParticipant: EventParticipant = {
+    id: hostId,
+    name: input.hostName.trim() || "Host",
+    avatarSeed: hostId,
+    isHost: true,
     joinedAt: new Date().toISOString(),
   };
 
-  room.participants.push(newParticipant);
+  const room: EventRoom = {
+    id: generateId(),
+    code,
+    name: input.name.trim() || "Prompt Engineering Competition",
+    hostId,
+    hostName: hostParticipant.name,
+    status: "lobby",
+    challengeIds: input.challengeIds,
+    currentChallengeIndex: 0,
+    timeLimitSeconds: input.timeLimitSeconds ?? 300,
+    createdAt: new Date().toISOString(),
+    participants: [hostParticipant],
+    submissions: [],
+  };
+
   persistEventRoom(room);
-  return newParticipant;
+
+  if (isBrowser()) {
+    fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.room) persistEventRoom(data.room);
+      })
+      .catch(() => {});
+  }
+
+  return { room, hostParticipantId: hostId };
+}
+
+export async function joinEventRoomAsync(code: string, participantName: string): Promise<EventParticipant | null> {
+  const upper = code.toUpperCase().trim();
+  try {
+    const res = await fetch(`/api/events/${upper}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "join", name: participantName }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      persistEventRoom(data.room);
+      return data.participant;
+    }
+  } catch {
+    // API network fallback
+  }
+
+  return joinEventRoom(code, participantName);
+}
+
+export function joinEventRoom(code: string, participantName: string): EventParticipant | null {
+  const upper = code.toUpperCase().trim();
+  const room = readEventRoom(upper);
+  
+  let participant: EventParticipant | null = null;
+
+  if (room) {
+    const existing = room.participants.find(
+      (p) => p.name.toLowerCase().trim() === participantName.toLowerCase().trim()
+    );
+    if (existing) {
+      participant = existing;
+    } else {
+      const newId = generateId();
+      participant = {
+        id: newId,
+        name: participantName.trim() || `Player ${room.participants.length + 1}`,
+        avatarSeed: newId,
+        isHost: false,
+        joinedAt: new Date().toISOString(),
+      };
+      room.participants.push(participant);
+      persistEventRoom(room);
+    }
+  }
+
+  if (isBrowser()) {
+    fetch(`/api/events/${upper}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "join", name: participantName }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.room) persistEventRoom(data.room);
+      })
+      .catch(() => {});
+  }
+
+  return participant;
 }
 
 export function startEventCompetition(code: string): boolean {
-  const room = readEventRoom(code);
-  if (!room) return false;
+  const upper = code.toUpperCase().trim();
+  const room = readEventRoom(upper);
+  if (room) {
+    room.status = "active";
+    room.currentChallengeIndex = 0;
+    room.roundStartedAt = new Date().toISOString();
+    persistEventRoom(room);
+  }
 
-  room.status = "active";
-  room.currentChallengeIndex = 0;
-  room.roundStartedAt = new Date().toISOString();
-  persistEventRoom(room);
+  if (isBrowser()) {
+    fetch(`/api/events/${upper}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start" }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.code) persistEventRoom(data);
+      })
+      .catch(() => {});
+  }
+
   return true;
 }
 
 export function nextEventRound(code: string): boolean {
-  const room = readEventRoom(code);
-  if (!room) return false;
-
-  if (room.currentChallengeIndex + 1 < room.challengeIds.length) {
-    room.currentChallengeIndex += 1;
-    room.roundStartedAt = new Date().toISOString();
-  } else {
-    room.status = "completed";
+  const upper = code.toUpperCase().trim();
+  const room = readEventRoom(upper);
+  if (room) {
+    if (room.currentChallengeIndex + 1 < room.challengeIds.length) {
+      room.currentChallengeIndex += 1;
+      room.roundStartedAt = new Date().toISOString();
+    } else {
+      room.status = "completed";
+    }
+    persistEventRoom(room);
   }
-  persistEventRoom(room);
+
+  if (isBrowser()) {
+    fetch(`/api/events/${upper}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "next" }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.code) persistEventRoom(data);
+      })
+      .catch(() => {});
+  }
+
   return true;
 }
 
 export function endEventCompetition(code: string): boolean {
-  const room = readEventRoom(code);
-  if (!room) return false;
+  const upper = code.toUpperCase().trim();
+  const room = readEventRoom(upper);
+  if (room) {
+    room.status = "completed";
+    persistEventRoom(room);
+  }
 
-  room.status = "completed";
-  persistEventRoom(room);
+  if (isBrowser()) {
+    fetch(`/api/events/${upper}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "end" }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.code) persistEventRoom(data);
+      })
+      .catch(() => {});
+  }
+
   return true;
 }
 
@@ -307,35 +504,62 @@ export function submitEventScore(
   xpEarned: number,
   hintsUsed: number
 ): EventSubmission | null {
-  const room = readEventRoom(code);
-  if (!room) return null;
+  const upper = code.toUpperCase().trim();
+  const room = readEventRoom(upper);
+  
+  let submission: EventSubmission | null = null;
 
-  // Check if participant already submitted for this challenge round
-  const existingIdx = room.submissions.findIndex(
-    (s) => s.participantId === participantId && s.challengeId === challengeId
-  );
+  if (room) {
+    const existingIdx = room.submissions.findIndex(
+      (s) => s.participantId === participantId && s.challengeId === challengeId
+    );
 
-  const submission: EventSubmission = {
-    id: existingIdx >= 0 ? room.submissions[existingIdx].id : generateId(),
-    roomId: room.id,
-    challengeId,
-    participantId,
-    participantName,
-    prompt,
-    score,
-    dimensions,
-    xpEarned,
-    hintsUsed,
-    submittedAt: new Date().toISOString(),
-  };
+    submission = {
+      id: existingIdx >= 0 ? room.submissions[existingIdx].id : generateId(),
+      roomId: room.id,
+      challengeId,
+      participantId,
+      participantName,
+      prompt,
+      score,
+      dimensions,
+      xpEarned,
+      hintsUsed,
+      submittedAt: new Date().toISOString(),
+    };
 
-  if (existingIdx >= 0) {
-    room.submissions[existingIdx] = submission;
-  } else {
-    room.submissions.push(submission);
+    if (existingIdx >= 0) {
+      room.submissions[existingIdx] = submission;
+    } else {
+      room.submissions.push(submission);
+    }
+
+    persistEventRoom(room);
   }
 
-  persistEventRoom(room);
+  if (isBrowser()) {
+    fetch(`/api/events/${upper}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "submit",
+        participantId,
+        participantName,
+        challengeId,
+        prompt,
+        score,
+        dimensions,
+        xpEarned,
+        hintsUsed,
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.room) persistEventRoom(data.room);
+      })
+      .catch(() => {});
+  }
+
   return submission;
 }
 
@@ -344,7 +568,6 @@ export function exportEventCsv(room: EventRoom): void {
 
   const headers = ["Rank", "Participant Name", "Role", "Total XP", "Submissions Count", "Average Score", "Best Score"];
   
-  // Calculate stats per participant
   const stats = room.participants.map((p) => {
     const pSubmissions = room.submissions.filter((s) => s.participantId === p.id);
     const totalScore = pSubmissions.reduce((acc, s) => acc + s.score, 0);
