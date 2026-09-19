@@ -1,16 +1,6 @@
 import { NextResponse } from "next/server";
-import type { EventRoom, EventParticipant, EventSubmission } from "@/lib/event-store";
-
-declare global {
-  // eslint-disable-next-line no-var
-  var eventRoomsMap: Map<string, EventRoom> | undefined;
-}
-
-if (!globalThis.eventRoomsMap) {
-  globalThis.eventRoomsMap = new Map<string, EventRoom>();
-}
-
-const roomsMap = globalThis.eventRoomsMap;
+import type { EventParticipant, EventSubmission } from "@/lib/event-store";
+import { getCloudRoom, saveCloudRoom } from "../cloud-sync";
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
@@ -22,7 +12,7 @@ export async function GET(
 ) {
   const { code: rawCode } = await params;
   const code = rawCode.toUpperCase().trim();
-  const room = roomsMap.get(code);
+  const room = await getCloudRoom(code);
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -37,7 +27,7 @@ export async function POST(
 ) {
   const { code: rawCode } = await params;
   const code = rawCode.toUpperCase().trim();
-  const room = roomsMap.get(code);
+  const room = await getCloudRoom(code);
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -69,7 +59,7 @@ export async function POST(
       };
 
       room.participants.push(newParticipant);
-      roomsMap.set(code, room);
+      await saveCloudRoom(room);
       return NextResponse.json({ participant: newParticipant, room });
     }
 
@@ -77,7 +67,7 @@ export async function POST(
       room.status = "active";
       room.currentChallengeIndex = 0;
       room.roundStartedAt = new Date().toISOString();
-      roomsMap.set(code, room);
+      await saveCloudRoom(room);
       return NextResponse.json(room);
     }
 
@@ -88,13 +78,13 @@ export async function POST(
       } else {
         room.status = "completed";
       }
-      roomsMap.set(code, room);
+      await saveCloudRoom(room);
       return NextResponse.json(room);
     }
 
     if (action === "end") {
       room.status = "completed";
-      roomsMap.set(code, room);
+      await saveCloudRoom(room);
       return NextResponse.json(room);
     }
 
@@ -125,7 +115,7 @@ export async function POST(
         room.submissions.push(submission);
       }
 
-      roomsMap.set(code, room);
+      await saveCloudRoom(room);
       return NextResponse.json({ submission, room });
     }
 

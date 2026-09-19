@@ -1,17 +1,6 @@
 import { NextResponse } from "next/server";
 import type { EventRoom, EventParticipant } from "@/lib/event-store";
-
-// Use globalThis to persist room state across API route reloads in Node environment
-declare global {
-  // eslint-disable-next-line no-var
-  var eventRoomsMap: Map<string, EventRoom> | undefined;
-}
-
-if (!globalThis.eventRoomsMap) {
-  globalThis.eventRoomsMap = new Map<string, EventRoom>();
-}
-
-const roomsMap = globalThis.eventRoomsMap;
+import { getCloudRoom, saveCloudRoom } from "./cloud-sync";
 
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -34,7 +23,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Code parameter required" }, { status: 400 });
   }
 
-  const room = roomsMap.get(code);
+  const room = await getCloudRoom(code);
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
@@ -73,7 +62,7 @@ export async function POST(request: Request) {
       submissions: [],
     };
 
-    roomsMap.set(code, room);
+    await saveCloudRoom(room);
 
     return NextResponse.json({ room, hostParticipantId: hostId });
   } catch (err) {
