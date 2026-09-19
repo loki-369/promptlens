@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, ArrowLeft, Trophy, Users } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -11,9 +12,10 @@ import { EventGame } from "@/components/events/event-game";
 import { EventLeaderboard } from "@/components/events/event-leaderboard";
 import { JoinRoomModal } from "@/components/events/join-room-modal";
 
-export default function EventRoomPage({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = use(params);
-  const cleanCode = code.toUpperCase().trim();
+export default function EventRoomPage() {
+  const routeParams = useParams();
+  const rawCode = (routeParams?.code as string) || "";
+  const cleanCode = rawCode.toUpperCase().trim();
 
   const { room, hydrated } = useEventRoom(cleanCode);
   const [participantId, setParticipantId] = useState<string | null>(null);

@@ -89,28 +89,33 @@ export function readEventRoom(code: string): EventRoom | null {
   }
 }
 
+// Global cached snapshots for useSyncExternalStore
+const roomCache = new Map<string, EventRoom | null>();
+
 export function persistEventRoom(room: EventRoom): void {
   if (!isBrowser()) return;
-  const key = getRoomStorageKey(room.code);
+  const upperCode = room.code.toUpperCase().trim();
+  const key = getRoomStorageKey(upperCode);
+
   try {
     window.localStorage.setItem(key, JSON.stringify(room));
   } catch {
     // quota error fallback
   }
 
+  // Update in-memory cache with fresh object reference
+  roomCache.set(upperCode, room);
+
   if (broadcastChannel) {
     try {
-      broadcastChannel.postMessage({ type: "ROOM_UPDATED", code: room.code });
+      broadcastChannel.postMessage({ type: "ROOM_UPDATED", code: upperCode });
     } catch {
       // channel closed
     }
   }
 
-  window.dispatchEvent(new CustomEvent(EVENT_LOCAL_DISPATCH, { detail: room.code }));
+  window.dispatchEvent(new CustomEvent(EVENT_LOCAL_DISPATCH, { detail: upperCode }));
 }
-
-// Global cached snapshots for useSyncExternalStore
-const roomCache = new Map<string, EventRoom | null>();
 
 function getRoomSnapshot(code: string): EventRoom | null {
   const upper = code.toUpperCase().trim();
@@ -120,30 +125,42 @@ function getRoomSnapshot(code: string): EventRoom | null {
   return roomCache.get(upper) ?? null;
 }
 
+const listenersMap = new Map<string, Set<() => void>>();
+
 function subscribeRoom(code: string, callback: () => void) {
   const upper = code.toUpperCase().trim();
+  if (!upper) return () => {};
 
-  const handleUpdate = (updatedCode: string) => {
+  if (!listenersMap.has(upper)) {
+    listenersMap.set(upper, new Set());
+  }
+  listenersMap.get(upper)!.add(callback);
+
+  const notifyAll = (updatedCode: string) => {
     if (updatedCode === upper) {
-      roomCache.set(upper, readEventRoom(upper));
-      callback();
+      const fresh = readEventRoom(upper);
+      roomCache.set(upper, fresh);
+      const listeners = listenersMap.get(upper);
+      if (listeners) {
+        listeners.forEach((cb) => cb());
+      }
     }
   };
 
   const onLocalEvent = (e: Event) => {
     const detail = (e as CustomEvent<string>).detail;
-    handleUpdate(detail);
+    notifyAll(detail);
   };
 
   const onStorage = (e: StorageEvent) => {
     if (e.key === getRoomStorageKey(upper)) {
-      handleUpdate(upper);
+      notifyAll(upper);
     }
   };
 
   const onBroadcast = (e: MessageEvent) => {
     if (e.data && e.data.code === upper) {
-      handleUpdate(upper);
+      notifyAll(upper);
     }
   };
 
@@ -154,6 +171,14 @@ function subscribeRoom(code: string, callback: () => void) {
   }
 
   return () => {
+    const listeners = listenersMap.get(upper);
+    if (listeners) {
+      listeners.delete(callback);
+      if (listeners.size === 0) {
+        listenersMap.delete(upper);
+      }
+    }
+
     window.removeEventListener(EVENT_LOCAL_DISPATCH, onLocalEvent);
     window.removeEventListener("storage", onStorage);
     if (broadcastChannel) {
