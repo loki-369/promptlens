@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 const LINKS = [
   { href: "/play", label: "Play" },
   { href: "/daily", label: "Daily Challenge" },
+  { href: "/events", label: "Group Events" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/profile", label: "Profile" },
   { href: "/admin", label: "Admin" },

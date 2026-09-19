@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Target, CalendarDays, ArrowUpRight } from "lucide-react";
+import { Target, CalendarDays, Users, ArrowUpRight } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 
 const MODES = [
@@ -18,6 +18,12 @@ const MODES = [
     desc: "Same image, everyone, once a day. Climb the global leaderboard.",
     href: "/daily",
   },
+  {
+    icon: Users,
+    title: "Group Competitions",
+    desc: "Create group rooms for closed events, workshops, or team battles with live scoreboards.",
+    href: "/events",
+  },
 ];
 
 export function ModesGrid() {
@@ -28,7 +34,7 @@ export function ModesGrid() {
           <div className="max-w-xl">
             <p className="text-xs font-semibold uppercase tracking-widest text-accent mb-3">Game modes</p>
             <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
-              Two ways to sharpen your eye
+              Three ways to sharpen your eye
             </h2>
           </div>
           <Link href="/modes" className="text-sm font-semibold text-accent hover:text-accent-strong inline-flex items-center gap-1">
@@ -36,7 +42,7 @@ export function ModesGrid() {
           </Link>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-5">
+        <div className="grid sm:grid-cols-3 gap-5">
           {MODES.map((mode, i) => (
             <motion.div
               key={mode.title}

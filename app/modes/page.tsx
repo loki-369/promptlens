@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Target, CalendarDays, ArrowRight } from "lucide-react";
+import { Target, CalendarDays, Users, ArrowRight } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 
 const MODES = [
@@ -16,6 +16,13 @@ const MODES = [
     href: "/daily",
     desc: "Everyone in the world gets the same image today. One attempt, one score, one shared leaderboard.",
     tag: "Compete daily",
+  },
+  {
+    icon: Users,
+    title: "Group Events & Competitions",
+    href: "/events",
+    desc: "Host private group rooms for closed events, workshops, or team battles. Real-time scoreboard & CSV exports.",
+    tag: "Multiplayer / Event Mode",
   },
 ];
 
