@@ -3,50 +3,49 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Camera, Calendar, Users, ArrowUpRight, Aperture } from "lucide-react";
-import { GlassCard } from "@/components/ui/glass-card";
 
 const MODES = [
   {
+    num: "01",
     icon: Camera,
     title: "Guess the Prompt",
     desc: "Inspect AI images, deduce the ground-truth concepts, and score on Subject, Scene & Camera Details.",
     href: "/play",
     tag: "Solo Practice",
-    tagColor: "border-accent/40 bg-accent-soft text-accent",
   },
   {
+    num: "02",
     icon: Calendar,
     title: "Daily Benchmark",
     desc: "One global image challenge per day. Single attempt, shared global leaderboard.",
     href: "/daily",
     tag: "Daily Event",
-    tagColor: "border-warning/40 bg-warning-soft text-warning",
   },
   {
+    num: "03",
     icon: Users,
     title: "Group Competitions",
     desc: "Host private rooms for workshops, team events, or hackathons with live sync & CSV export.",
     href: "/events",
     tag: "Multiplayer",
-    tagColor: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
   },
 ];
 
 export function ModesGrid() {
   return (
-    <section className="relative py-24 border-t border-border">
+    <section className="relative py-20 border-t border-border">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-14">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
           <div className="max-w-xl">
-            <div className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold uppercase tracking-widest text-accent mb-3">
+            <div className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-accent mb-2 font-bold">
               <Aperture className="h-3.5 w-3.5" /> Modes & Formats
             </div>
             <h2 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight">
               Three Ways to Train Your Eye
             </h2>
           </div>
-          <Link href="/modes" className="text-xs font-mono font-bold text-accent hover:text-accent-strong inline-flex items-center gap-1">
-            EXPLORE ALL FORMATS <ArrowUpRight className="h-4 w-4" />
+          <Link href="/modes" className="text-xs font-mono font-bold text-accent hover:text-accent-strong inline-flex items-center gap-1 uppercase tracking-wider">
+            Explore All Formats <ArrowUpRight className="h-4 w-4" />
           </Link>
         </div>
 
@@ -54,34 +53,34 @@ export function ModesGrid() {
           {MODES.map((mode, i) => (
             <motion.div
               key={mode.title}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.5, delay: i * 0.08 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.4, delay: i * 0.08 }}
             >
               <Link href={mode.href} className="block h-full group">
-                <GlassCard className="p-7 h-full relative overflow-hidden hover:border-accent/60 transition-all duration-300 hover:-translate-y-1 shadow-lg">
-                  <div className="relative flex items-start justify-between mb-6">
-                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-surface-2 border border-border-strong text-accent shadow-sm group-hover:scale-105 transition-transform">
-                      <mode.icon className="h-6 w-6 stroke-[2]" />
-                    </div>
-                    <span className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full border ${mode.tagColor}`}>
+                <div className="h-full relative rounded-xl border border-border bg-surface p-6 transition-all duration-200 hover:border-accent hover:-translate-y-1 shadow-md">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="font-mono text-3xl font-extrabold text-accent/40 group-hover:text-accent transition-colors">
+                      {mode.num}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-md border border-border bg-surface-2 text-text-muted">
                       {mode.tag}
                     </span>
                   </div>
 
-                  <h3 className="relative font-display font-bold text-xl mb-2.5 group-hover:text-accent transition-colors">
+                  <h3 className="font-display font-bold text-xl mb-2 group-hover:text-accent transition-colors">
                     {mode.title}
                   </h3>
-                  <p className="relative text-xs text-text-muted leading-relaxed">
+                  <p className="text-xs text-text-muted leading-relaxed mb-6">
                     {mode.desc}
                   </p>
 
-                  <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between text-xs font-mono text-text-faint group-hover:text-accent transition-colors">
-                    <span>Enter Format</span>
+                  <div className="pt-4 border-t border-border flex items-center justify-between text-xs font-mono font-semibold text-text-faint group-hover:text-accent transition-colors uppercase tracking-wider">
+                    <span>Launch Mode</span>
                     <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </div>
-                </GlassCard>
+                </div>
               </Link>
             </motion.div>
           ))}
@@ -90,3 +89,4 @@ export function ModesGrid() {
     </section>
   );
 }
+
