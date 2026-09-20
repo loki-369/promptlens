@@ -129,6 +129,41 @@ body {
   box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.4);
 }
 
+/* 35mm Film Strip & Darkroom Reticle Utilities */
+.film-frame {
+  position: relative;
+  background: #090a0d;
+  border: 2px solid #232630;
+  box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.6);
+}
+
+.film-sprocket {
+  position: relative;
+}
+.film-sprocket::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 6px;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.15) 2px, transparent 2px);
+  background-size: 6px 16px;
+  pointer-events: none;
+}
+
+.darkroom-stamp {
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  transform: rotate(-3deg);
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+}
+
 .viewfinder-corner {
   position: relative;
 }
@@ -136,21 +171,21 @@ body {
 .viewfinder-corner::after {
   content: "";
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-color: var(--accent);
   pointer-events: none;
-  opacity: 0.8;
+  opacity: 0.9;
 }
 .viewfinder-corner::before {
-  top: 6px;
-  left: 6px;
+  top: 8px;
+  left: 8px;
   border-top: 2px solid;
   border-left: 2px solid;
 }
 .viewfinder-corner::after {
-  bottom: 6px;
-  right: 6px;
+  bottom: 8px;
+  right: 8px;
   border-bottom: 2px solid;
   border-right: 2px solid;
 }
@@ -180,4 +215,5 @@ body {
   background-size: 600px 100%;
   animation: shimmer 1.6s infinite linear;
 }
+
 
