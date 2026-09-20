@@ -262,22 +262,6 @@ export interface CreateRoomInput {
 }
 
 export async function createEventRoomAsync(input: CreateRoomInput): Promise<{ room: EventRoom; hostParticipantId: string }> {
-  try {
-    const res = await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      persistEventRoom(data.room);
-      return data;
-    }
-  } catch {
-    // API network fallback
-  }
-
-  // Fallback to local creation if API call fails
   const code = generateRoomCode();
   const hostId = generateId();
   const hostParticipant: EventParticipant = {
@@ -288,7 +272,7 @@ export async function createEventRoomAsync(input: CreateRoomInput): Promise<{ ro
     joinedAt: new Date().toISOString(),
   };
 
-  const room: EventRoom = {
+  const localRoom: EventRoom = {
     id: generateId(),
     code,
     name: input.name.trim() || "Prompt Engineering Competition",
@@ -303,8 +287,26 @@ export async function createEventRoomAsync(input: CreateRoomInput): Promise<{ ro
     submissions: [],
   };
 
-  persistEventRoom(room);
-  return { room, hostParticipantId: hostId };
+  persistEventRoom(localRoom);
+
+  try {
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...input, code, hostId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.room) {
+        persistEventRoom(data.room);
+        return data;
+      }
+    }
+  } catch {
+    // API network fallback
+  }
+
+  return { room: localRoom, hostParticipantId: hostId };
 }
 
 export function createEventRoom(input: CreateRoomInput): { room: EventRoom; hostParticipantId: string } {
@@ -340,7 +342,7 @@ export function createEventRoom(input: CreateRoomInput): { room: EventRoom; host
     fetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, code, hostId }),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -351,6 +353,7 @@ export function createEventRoom(input: CreateRoomInput): { room: EventRoom; host
 
   return { room, hostParticipantId: hostId };
 }
+
 
 export async function joinEventRoomAsync(code: string, participantName: string): Promise<EventParticipant | null> {
   const upper = code.toUpperCase().trim();

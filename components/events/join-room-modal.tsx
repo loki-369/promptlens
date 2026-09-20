@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Users, ArrowRight, AlertCircle } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
-import { joinEventRoom, readEventRoom } from "@/lib/event-store";
+import { fetchServerRoom, joinEventRoom, joinEventRoomAsync, readEventRoom, type EventParticipant } from "@/lib/event-store";
 import { useProfile } from "@/lib/store";
 
 interface JoinRoomModalProps {
@@ -21,8 +21,9 @@ export function JoinRoomModal({ isOpen, onClose, defaultCode = "" }: JoinRoomMod
   const [code, setCode] = useState(defaultCode);
   const [name, setName] = useState(profile.name !== "You" ? profile.name : "");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleJoin = (e: React.FormEvent) => {
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -39,20 +40,41 @@ export function JoinRoomModal({ isOpen, onClose, defaultCode = "" }: JoinRoomMod
       return;
     }
 
-    const room = readEventRoom(cleanCode);
-    if (!room) {
-      setError(`No competition room found with code "${cleanCode}". Make sure the host has created it.`);
-      return;
-    }
+    setLoading(true);
 
-    const participant = joinEventRoom(cleanCode, cleanName);
-    if (participant && typeof window !== "undefined") {
-      window.sessionStorage.setItem(`promptlens.event.${cleanCode}.participantId`, participant.id);
-    }
+    try {
+      // 1. Fetch room from cloud server so cross-device join works from phone to laptop
+      const serverRoom = await fetchServerRoom(cleanCode);
+      let participant: EventParticipant | null = null;
 
-    onClose();
-    router.push(`/events/${cleanCode}`);
+      if (serverRoom) {
+        participant = await joinEventRoomAsync(cleanCode, cleanName);
+      } else {
+        const localRoom = readEventRoom(cleanCode);
+        if (localRoom) {
+          participant = joinEventRoom(cleanCode, cleanName);
+        }
+      }
+
+      if (!participant && !readEventRoom(cleanCode)) {
+        setError(`No competition room found with code "${cleanCode}". Make sure the host has created it.`);
+        setLoading(false);
+        return;
+      }
+
+      if (participant && typeof window !== "undefined") {
+        window.sessionStorage.setItem(`promptlens.event.${cleanCode}.participantId`, participant.id);
+      }
+
+      onClose();
+      router.push(`/events/${cleanCode}`);
+    } catch {
+      setError("Failed to connect to room. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   return (
     <AnimatePresence>
@@ -138,10 +160,12 @@ export function JoinRoomModal({ isOpen, onClose, defaultCode = "" }: JoinRoomMod
                   </button>
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast hover:bg-accent-strong transition-colors"
+                    disabled={loading}
+                    className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast hover:bg-accent-strong transition-colors disabled:opacity-50"
                   >
-                    Enter Room <ArrowRight className="h-4 w-4" />
+                    {loading ? "Connecting..." : "Enter Room"} <ArrowRight className="h-4 w-4" />
                   </button>
+
                 </div>
               </form>
             </GlassCard>

@@ -34,10 +34,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, hostName, challengeIds, timeLimitSeconds } = body;
+    const { name, hostName, challengeIds, timeLimitSeconds, code: clientCode, hostId: clientHostId } = body;
 
-    const code = generateRoomCode();
-    const hostId = generateId();
+    const code = (clientCode || generateRoomCode()).toUpperCase().trim();
+    const hostId = clientHostId || generateId();
 
     const hostParticipant: EventParticipant = {
       id: hostId,
@@ -69,3 +69,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create room" }, { status: 500 });
   }
 }
+

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, Trophy, Clock, Layers } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { CHALLENGES } from "@/data/challenges";
-import { createEventRoom } from "@/lib/event-store";
+import { createEventRoomAsync } from "@/lib/event-store";
 import { useProfile } from "@/lib/store";
 
 interface CreateRoomModalProps {
@@ -36,7 +36,7 @@ export function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProps) {
   const toggleChallenge = (id: string) => {
     setSelectedChallengeIds((prev) => {
       if (prev.includes(id)) {
-        if (prev.length === 1) return prev; // keep at least one
+        if (prev.length === 1) return prev;
         return prev.filter((item) => item !== id);
       }
       return [...prev, id];
@@ -47,18 +47,17 @@ export function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProps) {
     setSelectedChallengeIds(CHALLENGES.map((c) => c.id));
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventName.trim() || !hostName.trim() || selectedChallengeIds.length === 0) return;
 
-    const { room, hostParticipantId } = createEventRoom({
+    const { room, hostParticipantId } = await createEventRoomAsync({
       name: eventName,
       hostName,
       challengeIds: selectedChallengeIds,
       timeLimitSeconds: timerSeconds,
     });
 
-    // Save host identity locally
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem(`promptlens.event.${room.code}.participantId`, hostParticipantId);
     }
