@@ -105,11 +105,12 @@ export function persistEventRoom(room: EventRoom): void {
     // quota error fallback
   }
 
-  // Update in-memory cache with fresh object reference if content changed
-  if (roomRawCache.get(upperCode) !== raw) {
-    roomRawCache.set(upperCode, raw);
-    roomCache.set(upperCode, room);
-  }
+  // Update in-memory cache
+  roomRawCache.set(upperCode, raw);
+  roomCache.set(upperCode, room);
+
+  // Immediately notify all active React useSyncExternalStore subscribers
+  notifyRoomListeners(upperCode);
 
   if (broadcastChannel) {
     try {
@@ -157,8 +158,8 @@ function subscribeRoom(code: string, callback: () => void) {
   const handleUpdate = (updatedCode: string) => {
     if (updatedCode === upper) {
       const fresh = readEventRoom(upper);
-      const raw = JSON.stringify(fresh);
-      if (roomRawCache.get(upper) !== raw) {
+      if (fresh) {
+        const raw = JSON.stringify(fresh);
         roomRawCache.set(upper, raw);
         roomCache.set(upper, fresh);
         notifyRoomListeners(upper);
@@ -217,8 +218,6 @@ export async function fetchServerRoom(code: string): Promise<EventRoom | null> {
     const raw = JSON.stringify(room);
 
     if (roomRawCache.get(upper) !== raw) {
-      roomRawCache.set(upper, raw);
-      roomCache.set(upper, room);
       persistEventRoom(room);
     }
     return room;
@@ -236,7 +235,7 @@ export function useEventRoom(code: string) {
 
   const room = useSyncExternalStore(subscribe, getSnapshot, () => null);
 
-  // Poll server API every 2.5s for cross-device real-time state synchronization
+  // Fast 1s polling interval for instant cross-device synchronization without manual page refreshes
   useEffect(() => {
     if (!isBrowser() || !upper) return;
 
@@ -244,13 +243,14 @@ export function useEventRoom(code: string) {
 
     const interval = setInterval(() => {
       fetchServerRoom(upper);
-    }, 2500);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [upper]);
 
   return { room, hydrated };
 }
+
 
 // --- Action API Functions ---
 
