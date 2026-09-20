@@ -1,6 +1,6 @@
 "use client";
 
-import { Flame } from "lucide-react";
+import { Aperture, Flame } from "lucide-react";
 import { DifficultyBadge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/utils";
 import { useProfile } from "@/lib/store";
@@ -19,34 +19,46 @@ export function ChallengeHeader({
   const pct = Math.round((index / total) * 100);
 
   return (
-    <div className="mb-6">
+    <div className="mb-6 p-4 rounded-xl border border-border bg-surface shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
-          <h1 className="font-display text-xl font-bold">
-            Challenge #{String(challenge.number).padStart(3, "0")}
-          </h1>
-          <DifficultyBadge difficulty={challenge.difficulty} />
-          <span className="text-xs text-text-faint hidden sm:inline">{challenge.category}</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-accent border border-accent/40 font-mono text-xs font-bold">
+            #{String(challenge.number).padStart(3, "0")}
+          </span>
+          <div>
+            <h1 className="font-display text-lg font-extrabold flex items-center gap-2">
+              <span>{challenge.imageAlt.slice(0, 45)}...</span>
+            </h1>
+            <div className="flex items-center gap-2 text-xs font-mono text-text-muted mt-0.5">
+              <span className="text-accent font-bold">{challenge.category}</span>
+              <span>·</span>
+              <DifficultyBadge difficulty={challenge.difficulty} />
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-text-muted">
-            <span className="font-semibold text-text tabular-nums">{hydrated ? formatNumber(profile.xp) : 0}</span> XP
-          </span>
-          <span className="inline-flex items-center gap-1 text-warning font-semibold">
-            <Flame className="h-4 w-4" />
-            <span className="tabular-nums">{hydrated ? profile.streak : 0}</span>
-          </span>
+
+        <div className="flex items-center gap-4 text-xs font-mono">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border-strong bg-bg">
+            <Aperture className="h-3.5 w-3.5 text-accent" />
+            <span className="text-text-muted">XP:</span>
+            <span className="font-bold text-accent tabular-nums">{hydrated ? formatNumber(profile.xp) : 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-warning/30 bg-warning-soft/30 text-warning font-bold">
+            <Flame className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{hydrated ? profile.streak : 0} STREAK</span>
+          </div>
         </div>
       </div>
+
       <div className="flex items-center gap-3">
-        <div className="h-1.5 flex-1 rounded-full bg-surface-2 overflow-hidden">
+        <div className="h-2 flex-1 rounded-full bg-bg border border-border overflow-hidden p-0.5">
           <div
-            className="h-full rounded-full bg-accent transition-all duration-500"
+            className="h-full rounded-full bg-accent transition-all duration-500 shadow-sm"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="text-xs tabular-nums text-text-faint shrink-0">
-          {index} / {total}
+        <span className="text-xs font-mono font-bold text-text-muted shrink-0">
+          LENS {index} / {total}
         </span>
       </div>
     </div>
